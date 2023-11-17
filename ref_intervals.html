@@ -5372,8 +5372,7 @@ p2_gender_prev &lt;- gender_prevs %&gt;%
 </div>
 <div id="create-combined-prevalence-adjusted-ri" class="section level3">
 <h3>Create combined prevalence adjusted RI</h3>
-<pre class="r"><code># TODO: tjek at 1 == female
-res_gender &lt;- res %&gt;%
+<pre class="r"><code>res_gender &lt;- res %&gt;%
     mutate(
         p1_gender = map2(data, outcome, ~ .x %&gt;%
             filter(gender == 1) %&gt;%
@@ -5508,112 +5507,360 @@ check_partitioning &lt;- function(p1, p2, common_p, ri_lower, ri_upper) {
 res_gender %&gt;%
     select(outcome, should_partition) %&gt;%
     DT::datatable()</code></pre>
-<div class="datatables html-widget html-fill-item-overflow-hidden html-fill-item" id="htmlwidget-28ec5389d93c730c20cc" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-28ec5389d93c730c20cc">{"x":{"filter":"none","vertical":false,"data":[["1","2","3"],["X2015_IGA","X2015_IGG","X2015_IGM"],[false,false,false]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>outcome<\/th>\n      <th>should_partition<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item-overflow-hidden html-fill-item" id="htmlwidget-177148efdd6549627555" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-177148efdd6549627555">{"x":{"filter":"none","vertical":false,"data":[["1","2","3"],["X2015_IGA","X2015_IGG","X2015_IGM"],[false,false,false]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>outcome<\/th>\n      <th>should_partition<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 <div id="age-groups-partitioning" class="section level2">
 <h2>Age groups partitioning</h2>
 <p><a href="https://www.sundhed.dk/sundhedsfaglig/laegehaandbogen/undersoegelser-og-proever/klinisk-biokemi/blodproever/immunglobuliner-ig/" class="uri">https://www.sundhed.dk/sundhedsfaglig/laegehaandbogen/undersoegelser-og-proever/klinisk-biokemi/blodproever/immunglobuliner-ig/</a></p>
-<p>IGA 6-14 år: 0,47-2,21 g/L 14-18 år: 0,53-2,87 g/L</p>
-<p>IGG 4 år - 10 år: 5,4-13,6 g/L 10 år - 18 år: 6,6-15,3 g/L</p>
-<p>IGM 1-18 år: 0,48-1,86 g/L</p>
 <div id="create-age-partitions" class="section level3">
 <h3>Create age partitions</h3>
 <pre class="r"><code>get_age_prev &lt;- function(prev_data, age_from, age_to) {
     # age_def_expr &lt;- parse(text = age_def)
 
     prev_data %&gt;%
-        filter(between(age, age_from, age_to)) %&gt;%
+        filter(age &gt;= age_from &amp; age &lt; age_to) %&gt;%
         pull(value) %&gt;%
         sum() %&gt;%
         return()
 }
-
-# set age definitions
-res_age &lt;- dfs %&gt;%
-    expand_grid(gender = unique(df$gender)) %&gt;%
-    mutate(
-        data = map2(data, gender, ~ .x %&gt;% filter(gender == .y)),
-    )
-
-age_defs &lt;- tibble(p1_age_from = 6) %&gt;%
-    # Kører den ikke helt til 18 for så det kun en partition. p2_to kan kun være 11,13,15,17, 18 med 2 jumps
-    expand_grid(p1_age_to = seq(8, 16, 2)) %&gt;%
-    mutate(p2_age_from = p1_age_to + 1, p2_age_to = 18)
-
-
-
-# OLD
-# mutate(p2_age_from = p1_age_to + 1) %&gt;%
-# expand_grid(p2_age_to = c(11, 13, 15, 17, 18)) %&gt;%
-# filter(p2_age_from &lt; p2_age_to)
-
 
 make_age_partition &lt;- function(df, age_from, age_to, outcome) {
     # age_def_expr &lt;- parse(text = age_def)
     # eval(age_def_expr)
 
     out &lt;- df %&gt;%
-        filter(between(age_year, age_from, age_to)) %&gt;%
+        filter(age_year &gt;= age_from &amp; age_year &lt; age_to) %&gt;%
         pull(!!outcome)
     return(out)
 }
 
-res_age &lt;- res_age %&gt;%
-    expand_grid(age_defs) %&gt;%
-    mutate(id = row_number()) %&gt;%
-    nest(part_data = c(data, outcome, p1_age_from, p1_age_to, p2_age_from, p2_age_to)) %&gt;%
-    mutate(
-        p1 = map(part_data, ~ make_age_partition(
-            df = pluck(.x, &quot;data&quot;, 1),
-            age_from = pluck(.x, &quot;p1_age_from&quot;, 1),
-            age_to = pluck(.x, &quot;p1_age_to&quot;, 1),
-            outcome = pluck(.x, &quot;outcome&quot;, 1)
-        )),
-        p2 = map(part_data, ~ make_age_partition(
-            df = pluck(.x, &quot;data&quot;, 1),
-            age_from = pluck(.x, &quot;p2_age_from&quot;, 1),
-            age_to = pluck(.x, &quot;p2_age_to&quot;, 1),
-            outcome = pluck(.x, &quot;outcome&quot;, 1)
-        )),
-    ) %&gt;%
-    mutate(
-        prevalence_data = map(gender, ~ prev_data %&gt;% filter(gender == .x)),
-        p1_prev = map2_int(prevalence_data, part_data, ~ get_age_prev(.x, age_from = pluck(.y, &quot;p1_age_from&quot;, 1), age_to = pluck(.y, &quot;p1_age_to&quot;, 1))),
-        p2_prev = map2_int(prevalence_data, part_data, ~ get_age_prev(.x, age_from = pluck(.y, &quot;p2_age_from&quot;, 1), age_to = pluck(.y, &quot;p2_age_to&quot;, 1))),
-    ) %&gt;%
-    unnest(part_data) %&gt;%
-    nest(adj_data = c(p1, p2, p1_prev, p2_prev)) %&gt;%
-    mutate(
-        prev_adj_data = map(adj_data, ~ prev_adj_dist(
-            p1 = pluck(.x, &quot;p1&quot;, 1),
-            p2 = pluck(.x, &quot;p2&quot;, 1),
-            p1_prev = pluck(.x, &quot;p1_prev&quot;, 1),
-            p2_prev = pluck(.x, &quot;p2_prev&quot;, 1)
-        )),
-    ) %&gt;%
-    unnest(adj_data)
 
-## create common RI
+run_partitions &lt;- function(age_defs, outc = NULL, sex = NULL) {
+    # TODO: limit to outcome and age partition of interest. Right now runs all analyses
 
-res_age &lt;- res_age %&gt;% mutate(
-    reflimit_adj = map(prev_adj_data, ~ refLimit(data = .x, RI = &quot;n&quot;, CI = &quot;n&quot;), .progress = !knitr::is_html_output()),
-    ri_lower_adj = map_dbl(reflimit_adj, ~ .x %&gt;% pluck(&quot;Ref_Int&quot;, &quot;lowerRefLimit.2.5%&quot;)),
-    ri_upper_adj = map_dbl(reflimit_adj, ~ .x %&gt;% pluck(&quot;Ref_Int&quot;, &quot;upperRefLimit.97.5%&quot;))
-)
+    # if (is.null(sex)) {
+    #     res_age &lt;- dfs
+    # } else {
+    #     res_age &lt;- dfs %&gt;%
+    #         expand_grid(gender = unique(df$gender)) %&gt;%
+    #         mutate(
+    #             data = map2(data, gender, ~ .x %&gt;% filter(gender == .y)),
+    #         ) %&gt;%
+    #         filter(gender == sex)
+    # }
 
+    # if (!is.null(outc)) {
+    #     res_age &lt;- res_age %&gt;% filter(outcome == outc)
+    # }
+    res_age &lt;- dfs %&gt;%
+        expand_grid(gender = unique(df$gender)) %&gt;%
+        mutate(
+            data = map2(data, gender, ~ .x %&gt;% filter(gender == .y)),
+        )
 
-## calculate RI for each partition
+    if (!is.null(outc)) {
+        res_age &lt;- res_age %&gt;% filter(outcome == outc)
+    }
 
-res_age &lt;- res_age %&gt;% mutate(
-    reflimit_p1 = map(p1, ~ refLimit(data = .x, RI = &quot;n&quot;, CI = &quot;n&quot;), .progress = !knitr::is_html_output()),
-    ri_p1_lower = map_dbl(reflimit_p1, ~ pluck(.x, &quot;Ref_Int&quot;, &quot;lowerRefLimit.2.5%&quot;)),
-    ri_p1_upper = map_dbl(reflimit_p1, ~ pluck(.x, &quot;Ref_Int&quot;, &quot;upperRefLimit.97.5%&quot;)),
-    reflimit_p2 = map(p2, ~ refLimit(data = .x, RI = &quot;n&quot;, CI = &quot;n&quot;), .progress = !knitr::is_html_output()),
-    ri_p2_lower = map_dbl(reflimit_p2, ~ pluck(.x, &quot;Ref_Int&quot;, &quot;lowerRefLimit.2.5%&quot;)),
-    ri_p2_upper = map_dbl(reflimit_p2, ~ pluck(.x, &quot;Ref_Int&quot;, &quot;upperRefLimit.97.5%&quot;))
-)</code></pre>
+    if (!is.null(sex)) {
+        res_age &lt;- res_age %&gt;% filter(gender == sex)
+    }
+
+    res_age &lt;- res_age %&gt;%
+        expand_grid(age_defs) %&gt;%
+        mutate(id = row_number()) %&gt;%
+        nest(part_data = c(data, outcome, p1_age_from, p1_age_to, p2_age_from, p2_age_to)) %&gt;%
+        mutate(
+            p1 = map(part_data, ~ make_age_partition(
+                df = pluck(.x, &quot;data&quot;, 1),
+                age_from = pluck(.x, &quot;p1_age_from&quot;, 1),
+                age_to = pluck(.x, &quot;p1_age_to&quot;, 1),
+                outcome = pluck(.x, &quot;outcome&quot;, 1)
+            )),
+            p2 = map(part_data, ~ make_age_partition(
+                df = pluck(.x, &quot;data&quot;, 1),
+                age_from = pluck(.x, &quot;p2_age_from&quot;, 1),
+                age_to = pluck(.x, &quot;p2_age_to&quot;, 1),
+                outcome = pluck(.x, &quot;outcome&quot;, 1)
+            )),
+        ) %&gt;%
+        mutate(
+            prevalence_data = map(gender, ~ prev_data %&gt;% filter(gender == .x)),
+            p1_prev = map2_int(prevalence_data, part_data, ~ get_age_prev(.x, age_from = pluck(.y, &quot;p1_age_from&quot;, 1), age_to = pluck(.y, &quot;p1_age_to&quot;, 1))),
+            p2_prev = map2_int(prevalence_data, part_data, ~ get_age_prev(.x, age_from = pluck(.y, &quot;p2_age_from&quot;, 1), age_to = pluck(.y, &quot;p2_age_to&quot;, 1))),
+        ) %&gt;%
+        unnest(part_data) %&gt;%
+        nest(adj_data = c(p1, p2, p1_prev, p2_prev)) %&gt;%
+        mutate(
+            prev_adj_data = map(adj_data, ~ prev_adj_dist(
+                p1 = pluck(.x, &quot;p1&quot;, 1),
+                p2 = pluck(.x, &quot;p2&quot;, 1),
+                p1_prev = pluck(.x, &quot;p1_prev&quot;, 1),
+                p2_prev = pluck(.x, &quot;p2_prev&quot;, 1)
+            )),
+        ) %&gt;%
+        unnest(adj_data)
+
+    ## create common RI
+
+    res_age &lt;- res_age %&gt;% mutate(
+        reflimit_adj = map(prev_adj_data, ~ refLimit(data = .x, RI = &quot;n&quot;, CI = &quot;n&quot;), .progress = !knitr::is_html_output()),
+        ri_lower_adj = map_dbl(reflimit_adj, ~ .x %&gt;% pluck(&quot;Ref_Int&quot;, &quot;lowerRefLimit.2.5%&quot;)),
+        ri_upper_adj = map_dbl(reflimit_adj, ~ .x %&gt;% pluck(&quot;Ref_Int&quot;, &quot;upperRefLimit.97.5%&quot;))
+    )
+
+    ## calculate RI for each partition
+    run_reflimit &lt;- function(partition) {
+        ci_method &lt;- if_else(length(partition) &gt; 1000, &quot;boot&quot;, &quot;n&quot;)
+        refLimit(data = partition, RI = &quot;n&quot;, CI = ci_method) %&gt;% return()
+    }
+
+    res_age &lt;- res_age %&gt;% mutate(
+        reflimit_p1 = map(p1, ~ run_reflimit(.x), .progress = !knitr::is_html_output()),
+        ri_p1_lower = map_dbl(reflimit_p1, ~ pluck(.x, &quot;Ref_Int&quot;, &quot;lowerRefLimit.2.5%&quot;)),
+        ri_p1_lower_lowlim = map_dbl(reflimit_p1, ~ pluck(.x, &quot;Conf_Int&quot;, &quot;lowerRefLowLimit&quot;, .default = NA)),
+        ri_p1_lower_uplim = map_dbl(reflimit_p1, ~ pluck(.x, &quot;Conf_Int&quot;, &quot;lowerRefUpperLimit&quot;, .default = NA)),
+        ri_p1_upper = map_dbl(reflimit_p1, ~ pluck(.x, &quot;Ref_Int&quot;, &quot;upperRefLimit.97.5%&quot;, .default = NA)),
+        ri_p1_upper_lowlim = map_dbl(reflimit_p1, ~ pluck(.x, &quot;Conf_Int&quot;, &quot;upperRefLowLimit&quot;, .default = NA)),
+        ri_p1_upper_uplim = map_dbl(reflimit_p1, ~ pluck(.x, &quot;Conf_Int&quot;, &quot;upperRefUpperLimit&quot;, .default = NA)),
+        reflimit_p2 = map(p2, ~ run_reflimit(.x), .progress = !knitr::is_html_output()),
+        ri_p2_lower = map_dbl(reflimit_p2, ~ pluck(.x, &quot;Ref_Int&quot;, &quot;lowerRefLimit.2.5%&quot;)),
+        ri_p2_lower_lowlim = map_dbl(reflimit_p2, ~ pluck(.x, &quot;Conf_Int&quot;, &quot;lowerRefLowLimit&quot;)),
+        ri_p2_lower_uplim = map_dbl(reflimit_p2, ~ pluck(.x, &quot;Conf_Int&quot;, &quot;lowerRefUpperLimit&quot;)),
+        ri_p2_upper = map_dbl(reflimit_p2, ~ pluck(.x, &quot;Ref_Int&quot;, &quot;upperRefLimit.97.5%&quot;)),
+        ri_p2_upper_lowlim = map_dbl(reflimit_p2, ~ pluck(.x, &quot;Conf_Int&quot;, &quot;upperRefLowLimit&quot;)),
+        ri_p2_upper_uplim = map_dbl(reflimit_p2, ~ pluck(.x, &quot;Conf_Int&quot;, &quot;upperRefUpperLimit&quot;)),
+    )
+
+    res_age &lt;- res_age %&gt;%
+        nest(part_data = c(p1, p2, prev_adj_data, ri_lower_adj, ri_upper_adj)) %&gt;%
+        mutate(
+            partition_checks = map(part_data, ~
+                check_partitioning(
+                    p1 = pluck(.x, &quot;p1&quot;, 1),
+                    p2 = pluck(.x, &quot;p2&quot;, 1),
+                    common_p = pluck(.x, &quot;prev_adj_data&quot;, 1),
+                    ri_lower = pluck(.x, &quot;ri_lower_adj&quot;, 1),
+                    ri_upper = pluck(.x, &quot;ri_upper_adj&quot;, 1)
+                ))
+        ) %&gt;%
+        unnest_wider(partition_checks) %&gt;%
+        unnest(part_data) %&gt;%
+        mutate(
+            p1_age_str = glue(&quot;{p1_age_from}-{p1_age_to}&quot;),
+            p2_age_str = glue(&quot;{p2_age_from}-{p2_age_to}&quot;),
+            p1_n = map_dbl(p1, ~ length(.x)),
+            p2_n = map_dbl(p2, ~ length(.x))
+        )
+
+    return(res_age)
+}</code></pre>
+</div>
+</div>
+<div id="run-partition-checks" class="section level2">
+<h2>Run partition checks</h2>
+<pre class="r"><code>display_partition_results &lt;- function(df) {
+    df %&gt;%
+        select(outcome, gender, p1_age_str, p2_age_str, p1_n, p2_n, should_partition) %&gt;%
+        arrange(gender) %&gt;%
+        rmarkdown::paged_table()
+}
+
+display_ref_results &lt;- function(df) {
+    df %&gt;%
+        mutate(
+            age_group = glue(&quot;{p1_age_from}-{p1_age_to}&quot;)
+        ) %&gt;%
+        select(outcome, gender, age_group, p1_n, ri_p1_lower, ri_p1_lower_lowlim, ri_p1_lower_uplim, ri_p1_upper, ri_p1_upper_lowlim, ri_p1_upper_uplim) %&gt;%
+        rename(&quot;n&quot; = p1_n, &quot;lower&quot; = ri_p1_lower, &quot;lower_lci&quot; = ri_p1_lower_lowlim, &quot;lower_uci&quot; = ri_p1_lower_uplim, &quot;upper&quot; = ri_p1_upper, &quot;upper_lci&quot; = ri_p1_upper_lowlim, &quot;upper_uci&quot; = ri_p1_upper_uplim) %&gt;%
+        rmarkdown::paged_table()
+}</code></pre>
+<div id="iga" class="section level3">
+<h3>IGA</h3>
+<p>Nuværende reference intervaller. Ikke kønspartitionerede</p>
+<p>IGA 6-14 år: 0,47-2,21 g/L 14-18 år: 0,53-2,87 g/L</p>
+<div id="boys" class="section level4">
+<h4>Boys</h4>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 8, 8, 10,
+    6, 10, 10, 12,
+    6, 12, 12, 14,
+    6, 14, 14, 16,
+    14, 16, 16, 18
+) %&gt;%
+    run_partitions(sex = 1, outc = &quot;X2015_IGA&quot;) %&gt;%
+    display_partition_results()</code></pre>
+<pre><code>## 
+## Sample size too small for non-parametric confidence intervals,
+##          bootstrapping instead
+## 
+## Sample size too small for non-parametric confidence intervals,
+##          bootstrapping instead
+## 
+## Sample size too small for non-parametric confidence intervals,
+##          bootstrapping instead
+## 
+## Sample size too small for non-parametric confidence intervals,
+##          bootstrapping instead</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["p1_age_str"],"name":[3],"type":["glue"],"align":["right"]},{"label":["p2_age_str"],"name":[4],"type":["glue"],"align":["right"]},{"label":["p1_n"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["p2_n"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["should_partition"],"name":[7],"type":["lgl"],"align":["right"]}],"data":[{"1":"X2015_IGA","2":"1","3":"6-8","4":"8-10","5":"103","6":"179","7":"FALSE"},{"1":"X2015_IGA","2":"1","3":"6-10","4":"10-12","5":"282","6":"175","7":"FALSE"},{"1":"X2015_IGA","2":"1","3":"6-12","4":"12-14","5":"457","6":"161","7":"FALSE"},{"1":"X2015_IGA","2":"1","3":"6-14","4":"14-16","5":"618","6":"119","7":"TRUE"},{"1":"X2015_IGA","2":"1","3":"14-16","4":"16-18","5":"119","6":"85","7":"TRUE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Der er indikation for at partitionere 6-14, 14-16 og 16-18 årige.</p>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 14, 15, 19,
+    14, 16, 15, 19,
+    16, 19, 15, 19
+) %&gt;%
+    run_partitions(sex = 1, outc = &quot;X2015_IGA&quot;) %&gt;%
+    display_ref_results()</code></pre>
+<pre><code>## 
+## Sample size too small for non-parametric confidence intervals,
+##          bootstrapping instead
+## 
+## Sample size too small for non-parametric confidence intervals,
+##          bootstrapping instead</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["age_group"],"name":[3],"type":["glue"],"align":["right"]},{"label":["n"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["lower"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["lower_lci"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["lower_uci"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["upper"],"name":[8],"type":["dbl"],"align":["right"]},{"label":["upper_lci"],"name":[9],"type":["dbl"],"align":["right"]},{"label":["upper_uci"],"name":[10],"type":["dbl"],"align":["right"]}],"data":[{"1":"X2015_IGA","2":"1","3":"6-14","4":"618","5":"0.541475","6":"0.50100","7":"0.5900","8":"2.78575","9":"2.5500","10":"3.030000"},{"1":"X2015_IGA","2":"1","3":"14-16","4":"119","5":"0.675000","6":"0.53400","7":"0.7600","8":"3.22000","9":"1.5700","10":"3.550000"},{"1":"X2015_IGA","2":"1","3":"16-19","4":"114","5":"0.531750","6":"0.31625","7":"0.5975","8":"3.96875","9":"3.4375","10":"4.834624"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+<div id="girls" class="section level4">
+<h4>Girls</h4>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 8, 8, 10,
+    6, 10, 10, 12,
+    10, 12, 12, 14,
+    10, 14, 14, 16,
+    14, 16, 16, 18,
+) %&gt;%
+    run_partitions(sex = 2, outc = &quot;X2015_IGA&quot;) %&gt;%
+    display_partition_results()</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["p1_age_str"],"name":[3],"type":["glue"],"align":["right"]},{"label":["p2_age_str"],"name":[4],"type":["glue"],"align":["right"]},{"label":["p1_n"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["p2_n"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["should_partition"],"name":[7],"type":["lgl"],"align":["right"]}],"data":[{"1":"X2015_IGA","2":"2","3":"6-8","4":"8-10","5":"148","6":"221","7":"FALSE"},{"1":"X2015_IGA","2":"2","3":"6-10","4":"10-12","5":"369","6":"240","7":"TRUE"},{"1":"X2015_IGA","2":"2","3":"10-12","4":"12-14","5":"240","6":"245","7":"FALSE"},{"1":"X2015_IGA","2":"2","3":"10-14","4":"14-16","5":"485","6":"185","7":"TRUE"},{"1":"X2015_IGA","2":"2","3":"14-16","4":"16-18","5":"185","6":"187","7":"FALSE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Der er indikation for at partitionere følgende: 6-10, 10-14, 14-18
+årige.</p>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 10, 10, 13,
+    10, 14, 17, 19,
+    14, 18, 18, 19,
+) %&gt;%
+    run_partitions(sex = 2, outc = &quot;X2015_IGA&quot;) %&gt;%
+    display_ref_results()</code></pre>
+<pre><code>## 
+## Sample size too small for non-parametric confidence intervals,
+##          bootstrapping instead</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["age_group"],"name":[3],"type":["glue"],"align":["right"]},{"label":["n"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["lower"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["lower_lci"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["lower_uci"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["upper"],"name":[8],"type":["dbl"],"align":["right"]},{"label":["upper_lci"],"name":[9],"type":["dbl"],"align":["right"]},{"label":["upper_uci"],"name":[10],"type":["dbl"],"align":["right"]}],"data":[{"1":"X2015_IGA","2":"2","3":"6-10","4":"369","5":"0.5220","6":"0.475","7":"0.580","8":"2.3750","9":"2.20","10":"2.53"},{"1":"X2015_IGA","2":"2","3":"10-14","4":"485","5":"0.5413","6":"0.511","7":"0.592","8":"2.8565","9":"2.63","10":"3.10"},{"1":"X2015_IGA","2":"2","3":"14-18","4":"372","5":"0.6873","6":"0.611","7":"0.722","8":"3.5150","9":"3.22","10":"3.95"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<div id="igg" class="section level3">
+<h3>IGG</h3>
+<p>Lægehåndbog intervaller IGG 4 år - 10 år: 5,4-13,6 g/L 10 år - 18 år:
+6,6-15,3 g/L</p>
+<div id="boys-1" class="section level4">
+<h4>BOYS</h4>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 8, 8, 12,
+    6, 12, 12, 16,
+    12, 14, 14, 16,
+    12, 16, 16, 18,
+    6, 12, 12, 18,
+) %&gt;%
+    run_partitions(sex = 1, outc = &quot;X2015_IGG&quot;) %&gt;%
+    display_partition_results()</code></pre>
+<pre><code>## 
+## Sample size too small for non-parametric confidence intervals,
+##          bootstrapping instead
+## 
+## Sample size too small for non-parametric confidence intervals,
+##          bootstrapping instead</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["p1_age_str"],"name":[3],"type":["glue"],"align":["right"]},{"label":["p2_age_str"],"name":[4],"type":["glue"],"align":["right"]},{"label":["p1_n"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["p2_n"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["should_partition"],"name":[7],"type":["lgl"],"align":["right"]}],"data":[{"1":"X2015_IGG","2":"1","3":"6-8","4":"8-12","5":"103","6":"360","7":"FALSE"},{"1":"X2015_IGG","2":"1","3":"6-12","4":"12-16","5":"463","6":"280","7":"TRUE"},{"1":"X2015_IGG","2":"1","3":"12-14","4":"14-16","5":"160","6":"120","7":"FALSE"},{"1":"X2015_IGG","2":"1","3":"12-16","4":"16-18","5":"280","6":"85","7":"FALSE"},{"1":"X2015_IGG","2":"1","3":"6-12","4":"12-18","5":"463","6":"365","7":"FALSE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Med 2-års split metode indikation for partitionere 6-12 og 12-18
+årige Men når man tester de to partitioner mod hinanden ikke
+indikation</p>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 12, 15, 18,
+    12, 18, 15, 19,
+    6, 18, 15, 19,
+) %&gt;%
+    run_partitions(sex = 1, outc = &quot;X2015_IGG&quot;) %&gt;%
+    display_ref_results()</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["age_group"],"name":[3],"type":["glue"],"align":["right"]},{"label":["n"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["lower"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["lower_lci"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["lower_uci"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["upper"],"name":[8],"type":["dbl"],"align":["right"]},{"label":["upper_lci"],"name":[9],"type":["dbl"],"align":["right"]},{"label":["upper_uci"],"name":[10],"type":["dbl"],"align":["right"]}],"data":[{"1":"X2015_IGG","2":"1","3":"6-12","4":"463","5":"6.2440","6":"6.05","7":"6.70","8":"13.4000","9":"13.0","10":"14.2"},{"1":"X2015_IGG","2":"1","3":"12-18","4":"365","5":"6.8140","6":"6.52","7":"7.22","8":"14.9850","9":"14.4","10":"15.6"},{"1":"X2015_IGG","2":"1","3":"6-18","4":"828","5":"6.6325","6":"6.26","7":"6.76","8":"14.3275","9":"14.1","10":"14.7"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+<div id="girls-1" class="section level4">
+<h4>GIRLS</h4>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 8, 8, 12,
+    6, 12, 12, 14,
+    12, 14, 14, 16,
+    12, 16, 16, 18,
+    6, 12, 12, 18
+) %&gt;%
+    run_partitions(sex = 2, outc = &quot;X2015_IGG&quot;) %&gt;%
+    display_partition_results()</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["p1_age_str"],"name":[3],"type":["glue"],"align":["right"]},{"label":["p2_age_str"],"name":[4],"type":["glue"],"align":["right"]},{"label":["p1_n"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["p2_n"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["should_partition"],"name":[7],"type":["lgl"],"align":["right"]}],"data":[{"1":"X2015_IGG","2":"2","3":"6-8","4":"8-12","5":"150","6":"464","7":"FALSE"},{"1":"X2015_IGG","2":"2","3":"6-12","4":"12-14","5":"614","6":"244","7":"TRUE"},{"1":"X2015_IGG","2":"2","3":"12-14","4":"14-16","5":"244","6":"184","7":"FALSE"},{"1":"X2015_IGG","2":"2","3":"12-16","4":"16-18","5":"428","6":"188","7":"FALSE"},{"1":"X2015_IGG","2":"2","3":"6-12","4":"12-18","5":"614","6":"616","7":"FALSE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Med 2-års split metode indikation for partitionere 6-12 og 12-18
+årige Men når man tester de to partitioner mod hinanden ikke
+indikation</p>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 12, 15, 18,
+    12, 18, 15, 19,
+    6, 18, 15, 19,
+) %&gt;%
+    run_partitions(sex = 1, outc = &quot;X2015_IGG&quot;) %&gt;%
+    display_ref_results()</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["age_group"],"name":[3],"type":["glue"],"align":["right"]},{"label":["n"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["lower"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["lower_lci"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["lower_uci"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["upper"],"name":[8],"type":["dbl"],"align":["right"]},{"label":["upper_lci"],"name":[9],"type":["dbl"],"align":["right"]},{"label":["upper_uci"],"name":[10],"type":["dbl"],"align":["right"]}],"data":[{"1":"X2015_IGG","2":"1","3":"6-12","4":"463","5":"6.2440","6":"6.05","7":"6.70","8":"13.4000","9":"13.0","10":"14.2"},{"1":"X2015_IGG","2":"1","3":"12-18","4":"365","5":"6.8140","6":"6.52","7":"7.22","8":"14.9850","9":"14.4","10":"15.6"},{"1":"X2015_IGG","2":"1","3":"6-18","4":"828","5":"6.6325","6":"6.26","7":"6.76","8":"14.3275","9":"14.1","10":"14.7"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<div id="igm" class="section level3">
+<h3>IGM</h3>
+<p>Nuværende reference intervaller 1-18 år: 0,48-1,86 g/L</p>
+<div id="boys-2" class="section level4">
+<h4>BOYS</h4>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 8, 8, 12,
+    6, 12, 12, 14,
+    12, 14, 14, 16,
+    12, 16, 16, 18,
+) %&gt;%
+    run_partitions(sex = 1, outc = &quot;X2015_IGM&quot;) %&gt;%
+    display_partition_results()</code></pre>
 <pre><code>## 
 ## Sample size too small for non-parametric confidence intervals,
 ##          bootstrapping instead
@@ -5623,62 +5870,61 @@ res_age &lt;- res_age %&gt;% mutate(
 ## 
 ## Sample size too small for non-parametric confidence intervals,
 ##          bootstrapping instead</code></pre>
-</div>
-</div>
-<div id="run-partition-checks" class="section level2">
-<h2>Run partition checks</h2>
-<pre class="r"><code>res_age &lt;- res_age %&gt;%
-    nest(part_data = c(p1, p2, prev_adj_data, ri_lower_adj, ri_upper_adj)) %&gt;%
-    mutate(
-        partition_checks = map(part_data, ~
-            check_partitioning(
-                p1 = pluck(.x, &quot;p1&quot;, 1),
-                p2 = pluck(.x, &quot;p2&quot;, 1),
-                common_p = pluck(.x, &quot;prev_adj_data&quot;, 1),
-                ri_lower = pluck(.x, &quot;ri_lower_adj&quot;, 1),
-                ri_upper = pluck(.x, &quot;ri_upper_adj&quot;, 1)
-            ))
-    ) %&gt;%
-    unnest_wider(partition_checks) %&gt;%
-    unnest(part_data) %&gt;%
-    mutate(
-        p1_age_str = glue(&quot;{p1_age_from}-{p1_age_to}&quot;),
-        p2_age_str = glue(&quot;{p2_age_from}-{p2_age_to}&quot;),
-        p1_n = map_dbl(p1, ~ length(.x)),
-        p2_n = map_dbl(p2, ~ length(.x))
-    )</code></pre>
-<div id="iga" class="section level3">
-<h3>IGA</h3>
-<pre class="r"><code>display_results &lt;- function(df, outcome) {
-    df %&gt;%
-        filter(outcome == !!outcome) %&gt;%
-        select(outcome, gender, p1_age_str, p2_age_str, p1_n, p2_n, should_partition, ri_p1_lower, ri_p2_lower, ri_p1_upper, ri_p2_upper) %&gt;%
-        arrange(gender) %&gt;%
-        rmarkdown::paged_table()
-}</code></pre>
-<pre class="r"><code>display_results(res_age, &quot;X2015_IGA&quot;)</code></pre>
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
-{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["p1_age_str"],"name":[3],"type":["glue"],"align":["right"]},{"label":["p2_age_str"],"name":[4],"type":["glue"],"align":["right"]},{"label":["p1_n"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["p2_n"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["should_partition"],"name":[7],"type":["lgl"],"align":["right"]},{"label":["ri_p1_lower"],"name":[8],"type":["dbl"],"align":["right"]},{"label":["ri_p2_lower"],"name":[9],"type":["dbl"],"align":["right"]},{"label":["ri_p1_upper"],"name":[10],"type":["dbl"],"align":["right"]},{"label":["ri_p2_upper"],"name":[11],"type":["dbl"],"align":["right"]}],"data":[{"1":"X2015_IGA","2":"1","3":"6-8","4":"9-18","5":"191","6":"660","7":"TRUE","8":"0.495200","9":"0.599875","10":"2.5260","11":"3.07000"},{"1":"X2015_IGA","2":"1","3":"6-10","4":"11-18","5":"372","6":"479","7":"TRUE","8":"0.524550","9":"0.590000","10":"2.6710","11":"3.22000"},{"1":"X2015_IGA","2":"1","3":"6-12","4":"13-18","5":"551","6":"300","7":"FALSE","8":"0.540000","9":"0.612250","10":"2.8020","11":"3.28175"},{"1":"X2015_IGA","2":"1","3":"6-14","4":"15-18","5":"689","6":"162","7":"TRUE","8":"0.554500","9":"0.622275","10":"2.7925","11":"3.92575"},{"1":"X2015_IGA","2":"1","3":"6-16","4":"17-18","5":"778","6":"73","7":"TRUE","8":"0.576225","9":"0.478750","10":"2.9815","11":"3.50700"},{"1":"X2015_IGA","2":"2","3":"6-8","4":"9-18","5":"241","6":"1062","7":"TRUE","8":"0.479500","9":"0.598575","10":"2.3550","11":"3.18700"},{"1":"X2015_IGA","2":"2","3":"6-10","4":"11-18","5":"483","6":"820","7":"TRUE","8":"0.543200","9":"0.599525","10":"2.3590","11":"3.30000"},{"1":"X2015_IGA","2":"2","3":"6-12","4":"13-18","5":"745","6":"558","7":"TRUE","8":"0.523600","9":"0.681525","10":"2.6035","11":"3.38000"},{"1":"X2015_IGA","2":"2","3":"6-14","4":"15-18","5":"949","6":"354","7":"TRUE","8":"0.552750","9":"0.719000","10":"2.6725","11":"3.64000"},{"1":"X2015_IGA","2":"2","3":"6-16","4":"17-18","5":"1134","6":"169","7":"TRUE","8":"0.572750","9":"0.753750","10":"2.8500","11":"3.53000"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["p1_age_str"],"name":[3],"type":["glue"],"align":["right"]},{"label":["p2_age_str"],"name":[4],"type":["glue"],"align":["right"]},{"label":["p1_n"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["p2_n"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["should_partition"],"name":[7],"type":["lgl"],"align":["right"]}],"data":[{"1":"X2015_IGM","2":"1","3":"6-8","4":"8-12","5":"102","6":"359","7":"FALSE"},{"1":"X2015_IGM","2":"1","3":"6-12","4":"12-14","5":"461","6":"160","7":"TRUE"},{"1":"X2015_IGM","2":"1","3":"12-14","4":"14-16","5":"160","6":"119","7":"FALSE"},{"1":"X2015_IGM","2":"1","3":"12-16","4":"16-18","5":"279","6":"85","7":"TRUE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Indikation for partitionere 6-12, 12-16, 16-18</p>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 12, 15, 19,
+    12, 16, 15, 19,
+    16, 18, 15, 19
+) %&gt;%
+    run_partitions(sex = 1, outc = &quot;X2015_IGM&quot;) %&gt;%
+    display_ref_results()</code></pre>
+<pre><code>## 
+## Sample size too small for non-parametric confidence intervals,
+##          bootstrapping instead</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["age_group"],"name":[3],"type":["glue"],"align":["right"]},{"label":["n"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["lower"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["lower_lci"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["lower_uci"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["upper"],"name":[8],"type":["dbl"],"align":["right"]},{"label":["upper_lci"],"name":[9],"type":["dbl"],"align":["right"]},{"label":["upper_uci"],"name":[10],"type":["dbl"],"align":["right"]}],"data":[{"1":"X2015_IGM","2":"1","3":"6-12","4":"461","5":"0.35285","6":"0.28100","7":"0.3770","8":"1.4800","9":"1.390","10":"1.66"},{"1":"X2015_IGM","2":"1","3":"12-16","4":"279","5":"0.41800","6":"0.39400","7":"0.4460","8":"1.7800","9":"1.660","10":"1.99"},{"1":"X2015_IGM","2":"1","3":"16-18","4":"85","5":"0.43935","6":"0.37315","7":"0.6067","8":"2.3735","9":"2.027","10":"3.19"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
 </div>
-<div id="igg" class="section level3">
-<h3>IGG</h3>
-<pre class="r"><code>display_results(res_age, &quot;X2015_IGG&quot;)</code></pre>
+<div id="girls-2" class="section level4">
+<h4>GIRLS</h4>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 8, 8, 12,
+    6, 12, 12, 14,
+    12, 14, 14, 16,
+    12, 16, 16, 18,
+    6, 12, 12, 18
+) %&gt;%
+    run_partitions(sex = 2, outc = &quot;X2015_IGM&quot;) %&gt;%
+    display_partition_results()</code></pre>
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
-{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["p1_age_str"],"name":[3],"type":["glue"],"align":["right"]},{"label":["p2_age_str"],"name":[4],"type":["glue"],"align":["right"]},{"label":["p1_n"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["p2_n"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["should_partition"],"name":[7],"type":["lgl"],"align":["right"]},{"label":["ri_p1_lower"],"name":[8],"type":["dbl"],"align":["right"]},{"label":["ri_p2_lower"],"name":[9],"type":["dbl"],"align":["right"]},{"label":["ri_p1_upper"],"name":[10],"type":["dbl"],"align":["right"]},{"label":["ri_p2_upper"],"name":[11],"type":["dbl"],"align":["right"]}],"data":[{"1":"X2015_IGG","2":"1","3":"6-8","4":"9-18","5":"191","6":"666","7":"FALSE","8":"6.29600","9":"6.70675","10":"13.400","11":"14.500"},{"1":"X2015_IGG","2":"1","3":"6-10","4":"11-18","5":"376","6":"481","7":"FALSE","8":"6.13950","9":"6.78050","10":"13.315","11":"14.700"},{"1":"X2015_IGG","2":"1","3":"6-12","4":"13-18","5":"556","6":"301","7":"FALSE","8":"6.33400","9":"6.87800","10":"13.815","11":"14.945"},{"1":"X2015_IGG","2":"1","3":"6-14","4":"15-18","5":"695","6":"162","7":"TRUE","8":"6.37200","9":"7.06525","10":"13.800","11":"15.570"},{"1":"X2015_IGG","2":"1","3":"6-16","4":"17-18","5":"784","6":"73","7":"TRUE","8":"6.54500","9":"6.78550","10":"14.200","11":"15.735"},{"1":"X2015_IGG","2":"2","3":"6-8","4":"9-18","5":"244","6":"1063","7":"TRUE","8":"6.36250","9":"6.78000","10":"14.375","11":"15.240"},{"1":"X2015_IGG","2":"2","3":"6-10","4":"11-18","5":"488","6":"819","7":"FALSE","8":"6.37250","9":"6.89500","10":"14.200","11":"15.600"},{"1":"X2015_IGG","2":"2","3":"6-12","4":"13-18","5":"750","6":"557","7":"FALSE","8":"6.37325","9":"7.01700","10":"14.600","11":"15.610"},{"1":"X2015_IGG","2":"2","3":"6-14","4":"15-18","5":"952","6":"355","7":"TRUE","8":"6.48000","9":"7.08300","10":"14.600","11":"15.810"},{"1":"X2015_IGG","2":"2","3":"6-16","4":"17-18","5":"1138","6":"169","7":"TRUE","8":"6.61475","9":"6.02250","10":"14.800","11":"15.525"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["p1_age_str"],"name":[3],"type":["glue"],"align":["right"]},{"label":["p2_age_str"],"name":[4],"type":["glue"],"align":["right"]},{"label":["p1_n"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["p2_n"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["should_partition"],"name":[7],"type":["lgl"],"align":["right"]}],"data":[{"1":"X2015_IGM","2":"2","3":"6-8","4":"8-12","5":"150","6":"463","7":"FALSE"},{"1":"X2015_IGM","2":"2","3":"6-12","4":"12-14","5":"613","6":"245","7":"TRUE"},{"1":"X2015_IGM","2":"2","3":"12-14","4":"14-16","5":"245","6":"184","7":"FALSE"},{"1":"X2015_IGM","2":"2","3":"12-16","4":"16-18","5":"429","6":"188","7":"FALSE"},{"1":"X2015_IGM","2":"2","3":"6-12","4":"12-18","5":"613","6":"617","7":"FALSE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
-</div>
-<div id="igm" class="section level3">
-<h3>IGM</h3>
-<pre class="r"><code>display_results(res_age, &quot;X2015_IGM&quot;)</code></pre>
+<p>Indikation for partitionere 6-12, 12-18 ved 2-års steps, men ikke når
+de to partitioner sammenlignes</p>
+<pre class="r"><code>tribble(
+    ~p1_age_from, ~p1_age_to, ~p2_age_from, ~p2_age_to,
+    6, 12, 14, 18,
+    12, 18, 14, 18,
+    6, 18, 14, 18
+) %&gt;%
+    run_partitions(sex = 2, outc = &quot;X2015_IGM&quot;) %&gt;%
+    display_ref_results()</code></pre>
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
-{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["p1_age_str"],"name":[3],"type":["glue"],"align":["right"]},{"label":["p2_age_str"],"name":[4],"type":["glue"],"align":["right"]},{"label":["p1_n"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["p2_n"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["should_partition"],"name":[7],"type":["lgl"],"align":["right"]},{"label":["ri_p1_lower"],"name":[8],"type":["dbl"],"align":["right"]},{"label":["ri_p2_lower"],"name":[9],"type":["dbl"],"align":["right"]},{"label":["ri_p1_upper"],"name":[10],"type":["dbl"],"align":["right"]},{"label":["ri_p2_upper"],"name":[11],"type":["dbl"],"align":["right"]}],"data":[{"1":"X2015_IGM","2":"1","3":"6-8","4":"9-18","5":"190","6":"664","7":"TRUE","8":"0.318025","9":"0.398125","10":"1.44125","11":"1.67750"},{"1":"X2015_IGM","2":"1","3":"6-10","4":"11-18","5":"375","6":"479","7":"FALSE","8":"0.354200","9":"0.415000","10":"1.44200","11":"1.78000"},{"1":"X2015_IGM","2":"1","3":"6-12","4":"13-18","5":"554","6":"300","7":"FALSE","8":"0.361250","9":"0.416575","10":"1.57500","11":"1.78950"},{"1":"X2015_IGM","2":"1","3":"6-14","4":"15-18","5":"693","6":"161","7":"TRUE","8":"0.367350","9":"0.434300","10":"1.56650","11":"2.10200"},{"1":"X2015_IGM","2":"1","3":"6-16","4":"17-18","5":"781","6":"73","7":"TRUE","8":"0.378100","9":"0.350200","10":"1.66450","11":"1.54300"},{"1":"X2015_IGM","2":"2","3":"6-8","4":"9-18","5":"242","6":"1065","7":"FALSE","8":"0.436925","9":"0.421650","10":"1.80850","11":"2.14000"},{"1":"X2015_IGM","2":"2","3":"6-10","4":"11-18","5":"486","6":"821","7":"FALSE","8":"0.423275","9":"0.424200","10":"1.86475","11":"2.17450"},{"1":"X2015_IGM","2":"2","3":"6-12","4":"13-18","5":"749","6":"558","7":"FALSE","8":"0.432000","9":"0.417975","10":"1.94250","11":"2.23200"},{"1":"X2015_IGM","2":"2","3":"6-14","4":"15-18","5":"953","6":"354","7":"FALSE","8":"0.432800","9":"0.410875","10":"2.12150","11":"2.20375"},{"1":"X2015_IGM","2":"2","3":"6-16","4":"17-18","5":"1138","6":"169","7":"FALSE","8":"0.421475","9":"0.458000","10":"2.12525","11":"2.21500"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+{"columns":[{"label":["outcome"],"name":[1],"type":["chr"],"align":["left"]},{"label":["gender"],"name":[2],"type":["fct"],"align":["left"]},{"label":["age_group"],"name":[3],"type":["glue"],"align":["right"]},{"label":["n"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["lower"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["lower_lci"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["lower_uci"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["upper"],"name":[8],"type":["dbl"],"align":["right"]},{"label":["upper_lci"],"name":[9],"type":["dbl"],"align":["right"]},{"label":["upper_uci"],"name":[10],"type":["dbl"],"align":["right"]}],"data":[{"1":"X2015_IGM","2":"2","3":"6-12","4":"613","5":"0.423400","6":"0.39800","7":"0.46800","8":"1.8365","9":"1.75000","10":"2.040000"},{"1":"X2015_IGM","2":"2","3":"12-18","4":"617","5":"0.417450","6":"0.39100","7":"0.50600","8":"2.2110","9":"2.13000","10":"2.380000"},{"1":"X2015_IGM","2":"2","3":"6-18","4":"1230","5":"0.420775","6":"0.39045","7":"0.43545","8":"2.1300","9":"2.08775","10":"2.283187"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
+</div>
 </div>
 </div>
 </div>
